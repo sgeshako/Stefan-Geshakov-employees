@@ -8,6 +8,8 @@ import java.io.IOException;
 import java.io.Reader;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -29,27 +31,43 @@ public class App
 
     public static void main( String[] args ) throws IOException {
 
-        String csvFilePath = "src/main/resources/input.csv";
+        boolean consoleMode = args.length != 0;
 
+        final String csvFilePath;
+        if (consoleMode) {
+            csvFilePath = args[0];
+        } else {
+            csvFilePath = Gui.openDialog();
+        }
+
+        // Group employees per project
         final Map<Long, List<Employee>> employeesPerProjectMap =
                 parseCsv(csvFilePath);
 
-        final Map<Pair<Long>, Long> pairEmployeesTotalOverlap =
-                employeesPerProjectMap.values()
+        // Calculate for every project all overlaps that occurred between employees
+        final Map<Long, Map<Pair<Long>, Overlap>> perProjectPairEmployeesOverlaps =
+                employeesPerProjectMap.entrySet()
                         .stream()
-                        .map(SweepLineAlgorithm::calculate)
-                        .flatMap(pairOverlapMap -> pairOverlapMap.entrySet().stream())
                         .collect(Collectors.toMap(
                                 Map.Entry::getKey,
-                                pairOverlapEntry -> pairOverlapEntry.getValue().getTotalDurationInDays(),
-                                Long::sum
+                                employeesPerProjectEntry -> SweepLineAlgorithm.calculate(employeesPerProjectEntry.getValue())
                         ));
-//        pairEmployeesTotalOverlap
-//                .forEach((longPair, aLong) -> System.out.println(longPair + ": " + aLong + " total duration in days." ));
+
+        // For each unique pair of employees sum their total overlap duration across all projects
+        final Map<Pair<Long>, Long> pairEmployeesTotalOverlapDuration =
+            perProjectPairEmployeesOverlaps
+                    .values()
+                    .stream()
+                    .flatMap(pairOverlapMap -> pairOverlapMap.entrySet().stream())
+                    .collect(Collectors.toMap(
+                            Map.Entry::getKey,
+                            pairOverlapEntry -> pairOverlapEntry.getValue().getTotalDurationInDays(),
+                            Long::sum
+                    ));
 
         // Which pair of employees have worked together the longest in total.
         final Pair<Long> highestOverlapEmployeePair =
-                pairEmployeesTotalOverlap
+                pairEmployeesTotalOverlapDuration
                         .entrySet()
                         .stream()
                         .reduce((pairEntry, pairEntry2) -> pairEntry.getValue() > pairEntry2.getValue() ? pairEntry : pairEntry2)
@@ -57,26 +75,29 @@ public class App
                         .orElseThrow(() -> new RuntimeException("Error: Couldn't find highest overlap pair of employees in " + employeesPerProjectMap.size() + " projects."));
 
 
-        System.out.println("Employee ID #1, Employee ID #2, Project ID, Days worked");
-        employeesPerProjectMap
-                .forEach((projectIdKey, projectEmployees) -> {
-                    SweepLineAlgorithm.calculate(projectEmployees)
-                            .entrySet()
-                            .stream()
-                            .filter(pairOverlapEntry -> pairOverlapEntry.getKey().equals(highestOverlapEmployeePair))
-                            .forEach(pairOverlapEntry -> {
-                                var pair = pairOverlapEntry.getKey();
-                                var overlap = pairOverlapEntry.getValue();
-                                System.out.print(pair.getFirst());
-                                System.out.print("\t");
-                                System.out.print(pair.getSecond());
-                                System.out.print("\t");
-                                System.out.print(projectIdKey);
-                                System.out.print("\t");
-                                System.out.print(overlap.getTotalDurationInDays());
-                                System.out.println();
+        // Print output
+        final List<String[]> printRecords = new ArrayList<>();
+
+        perProjectPairEmployeesOverlaps
+                .forEach((projectId, pairOverlapMap) -> {
+                        if (pairOverlapMap.containsKey(highestOverlapEmployeePair)) {
+                            var overlap = pairOverlapMap.get(highestOverlapEmployeePair);
+                            printRecords.add(new String[]{
+                                    String.valueOf(highestOverlapEmployeePair.getFirst()),
+                                    String.valueOf(highestOverlapEmployeePair.getSecond()),
+                                    String.valueOf(projectId),
+                                    String.valueOf(overlap.getTotalDurationInDays())
                             });
+                        }
                 });
+
+        String[] headers = { "Employee ID #1", "Employee ID #2", "Project ID", "Days worked" };
+        if (!consoleMode) {
+            Gui.showDialog(headers, printRecords.toArray(new String[0][]));
+        } else {
+            System.out.println(Arrays.toString(headers));
+            printRecords.forEach(rowData -> System.out.println(String.join("\t", rowData)));
+        }
     }
 
     static Map<Long, List<Employee>> parseCsv(String csvFilePath) throws IOException {

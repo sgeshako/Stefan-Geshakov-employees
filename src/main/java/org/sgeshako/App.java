@@ -7,7 +7,6 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.Reader;
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -121,13 +120,9 @@ public class App
         return Employee.builder()
                 .id(Long.valueOf(csvRecord.get(EMPLOYEE_ID)))
                 .projectId(Long.valueOf(csvRecord.get(PROJECT_ID)))
-                .from(LocalDate.parse(
-                        csvRecord.get(DATE_FROM),
-                        DateTimeFormatter.ofPattern("yyyy-MM-dd")))
+                .from(DateUtil.parse(csvRecord.get(DATE_FROM)))
                 .to(csvRecord.get(DATE_TO) != null ?
-                        LocalDate.parse(
-                                csvRecord.get(DATE_TO),
-                                DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+                        DateUtil.parse(csvRecord.get(DATE_TO))
                         : LocalDate.now())
                 .build();
     }
